@@ -81,7 +81,8 @@ RUN apt install -y \
         git \
         wget \
         fdisk \
-        util-linux
+        util-linux \
+        mtd-utils
 
 # Resize the rootfs
 COPY scripts/resizerootfs.sh /usr/local/bin

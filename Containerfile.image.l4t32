@@ -1,0 +1,63 @@
+FROM ubuntu:22.04
+
+LABEL org.opencontainers.image.authors="Badr @pythops"
+    
+# Define the BSP version
+#ARG BSP=https://developer.nvidia.com/downloads/remetpack-463r32releasev73t210jetson-210linur3273aarch64tbz2
+ARG BSP=https://developer.nvidia.com/downloads/embedded/l4t/r32_release_v7.4/t210/jetson-210_linux_r32.7.4_aarch64.tbz2
+RUN cat /etc/os-release
+# Install different dependencies
+RUN apt update && apt install -y \
+        wget \
+        patch \
+        bzip2 \
+        qemu-user-static \
+        sudo \
+        libxml2-utils \
+        python3 \
+        python2 \
+        gdisk \
+        kpartx \
+        nano \
+        git \
+        cpio
+
+# Extract the BSP
+RUN mkdir /build && wget -qO- $BSP | tar -jxpf - -C /build
+
+# Remove python2 gpio lib
+RUN rm /build/Linux_for_Tegra/tools/python-jetson-gpio_*_arm64.deb
+
+# Copy the ubuntu rootfs
+COPY rootfs/ /build/Linux_for_Tegra/rootfs/
+
+# Sudo permissions
+RUN chmod 4755 /build/Linux_for_Tegra/rootfs/usr/bin/sudo
+
+# Different patches
+COPY patches /patches
+RUN patch /build/Linux_for_Tegra/nv_tegra/nv-apply-debs.sh < /patches/nv-apply-debs.diff && \
+    patch /build/Linux_for_Tegra/tools/jetson-disk-image-creator.sh < /patches/jetson-disk-image-creator.diff
+
+# Install nvidia packages in the new rootfs
+WORKDIR /build/Linux_for_Tegra/
+RUN ./apply_binaries.sh
+
+# Fix permissions
+RUN chroot /build/Linux_for_Tegra/rootfs/ /bin/bash -c "chown -R jetson:jetson /home/jetson && chmod 1777 /tmp"
+
+# Edit initrd
+WORKDIR /tmp/pythops
+#RUN gzip -d -c /build/Linux_for_Tegra/rootfs/boot/initrd > initrd
+RUN gzip -d -c /build/Linux_for_Tegra/bootloader/l4t_initrd.img > initrd
+WORKDIR /tmp/pythops/lab
+RUN cpio -iv < ../initrd && \
+    echo "nameserver 127.0.0.53" > etc/resolv.conf && \
+    find . | cpio --create --format="newc" > ../new_initrd
+WORKDIR /tmp/pythops
+RUN gzip new_initrd && mv new_initrd.gz /build/Linux_for_Tegra/bootloader/l4t_initrd.img
+
+# Copy the script to create the image
+COPY scripts/create-jetson-image.sh /usr/local/bin/
+
+WORKDIR /build/Linux_for_Tegra/tools
