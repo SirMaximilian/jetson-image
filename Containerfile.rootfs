@@ -1,14 +1,16 @@
-FROM ubuntu:focal
+FROM ubuntu:22.04
 
 LABEL org.opencontainers.image.authors="Badr @pythops"
 
 # Install systemd
 RUN apt update && \
-    apt install -y systemd
+    apt install -y systemd \
+    gnupg
 
 # Update apt mirrors
-RUN echo "deb http://ports.ubuntu.com/ubuntu-ports/ bionic main" >> /etc/apt/sources.list && \
-    apt update
+RUN  apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
+RUN echo "deb http://ports.ubuntu.com/ubuntu-ports/ bionic main" >> /etc/apt/sources.list && apt update
+#RUN apt update
 
 # Nvidia required packages
 RUN apt install -y \
@@ -34,13 +36,15 @@ RUN apt install -y \
         libegl1-mesa \
         libgtk-3-0 \
         python2 \
-        python-is-python2 \
         libgstreamer1.0-0 \
         libgstreamer-plugins-bad1.0-0 \
         i2c-tools \
         bridge-utils
 
 # Additional tools
+RUN ln -fs /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata
+
 RUN apt install -y \
         bash-completion \
         build-essential \
@@ -59,6 +63,9 @@ RUN apt install -y \
         netplan.io \
         pciutils \
         python3-dev \
+        python3-pip \
+        python3-venv \
+        nano \
         ssh \
         sudo \
         udev \
@@ -66,14 +73,26 @@ RUN apt install -y \
         usbutils \
         neovim \
         wpasupplicant \
+        network-manager \
         parted \
         gdisk \
-        e2fsprogs
+        e2fsprogs \
+        isc-dhcp-server \
+        git \
+        wget \
+        fdisk \
+        util-linux
 
 # Resize the rootfs
 COPY scripts/resizerootfs.sh /usr/local/bin
 COPY scripts/resizerootfs.service /lib/systemd/system
 RUN systemctl enable resizerootfs.service
+
+COPY scripts/mount-configfs.sh /usr/local/bin
+COPY scripts/mount-configfs.service /lib/systemd/system
+RUN systemctl enable mount-configfs.service
+
+COPY scripts/setupDNS.sh /root/
 
 # Generate locales
 RUN locale-gen en_US.UTF-8
@@ -86,7 +105,7 @@ COPY config/netcfg.yaml /etc/netplan/netcfg.yaml
 # password: jetson
 RUN useradd \
         --create-home \
-        -G sudo \
+        -G sudo,video,audio,adm \
         -p $(openssl passwd -6 jetson) \
         -s /bin/bash \
         jetson

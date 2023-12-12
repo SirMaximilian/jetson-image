@@ -1,13 +1,13 @@
-FROM ubuntu
+FROM ubuntu:22.04
 
 LABEL org.opencontainers.image.authors="Badr @pythops"
-
+    
 # Define the BSP version
-ARG BSP=https://developer.nvidia.com/downloads/remetpack-463r32releasev73t210jetson-210linur3273aarch64tbz2
-
+#ARG BSP=https://developer.nvidia.com/downloads/remetpack-463r32releasev73t210jetson-210linur3273aarch64tbz2
+ARG BSP=https://developer.nvidia.com/downloads/embedded/l4t/r32_release_v7.4/t210/jetson-210_linux_r32.7.4_aarch64.tbz2
+RUN cat /etc/os-release
 # Install different dependencies
-RUN apt update && \
-    apt install -y \
+RUN apt update && apt install -y \
         wget \
         patch \
         bzip2 \
@@ -15,12 +15,17 @@ RUN apt update && \
         sudo \
         libxml2-utils \
         python3 \
+        python2 \
         gdisk \
-        kpartx
+        kpartx \
+        nano \
+        git
 
 # Extract the BSP
-RUN mkdir /build && \
-    wget -qO- $BSP | tar -jxpf - -C /build
+RUN mkdir /build && wget -qO- $BSP | tar -jxpf - -C /build
+
+# Remove python2 gpio lib
+RUN rm /build/Linux_for_Tegra/tools/python-jetson-gpio_*_arm64.deb
 
 # Copy the ubuntu rootfs
 COPY rootfs/ /build/Linux_for_Tegra/rootfs/
